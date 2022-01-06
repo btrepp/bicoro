@@ -1,0 +1,13 @@
+[package]
+name = "bicoro"
+version = "0.1.0"
+edition = "2021"
+readme = "README.md"
+description = "Bidirectional co-routine data structures"
+license = "MIT"
+repository = "https://github.com/btrepp/bicoro"
+
+# See more keys and their definitions at https://doc.rust-lang.org/cargo/reference/manifest.html
+
+[dependencies]
+do-notation = "0.1.3"
