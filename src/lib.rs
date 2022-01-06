@@ -1,8 +1,9 @@
 #![doc = include_str!("../README.md")]
 
+mod compat;
 mod coroutine;
 
-pub use crate::do_notation::*;
+pub use crate::compat::*;
 pub use coroutine::*;
-pub mod do_notation;
+
 pub mod executor;

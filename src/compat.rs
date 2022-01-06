@@ -32,7 +32,7 @@
 use crate::*;
 use ::do_notation::Lift;
 
-impl<'a, I, O, R> do_notation::Lift<R> for Coroutine<'a, I, O, R> {
+impl<'a, I, O, R> compat::Lift<R> for Coroutine<'a, I, O, R> {
     /// Creates coroutine from a value
     ///
     /// see [result](function@result)
