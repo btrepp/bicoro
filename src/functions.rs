@@ -104,3 +104,46 @@ where
         }),
     }
 }
+
+/// Transforms the input of coroutine A into B
+///
+/// This requires a coroutine that can map B inputs
+/// into a, as this is similar to running 'co'
+/// in the context of the output
+///
+/// This is a specialization of run_child
+///
+/// TLDR; change Input with the inform transform function
+pub fn transform_input<'a, Input: 'a, InputNested: 'a, Output: 'a, Transform: 'a, Result: 'a>(
+    co: Coroutine<'a, InputNested, Output, Result>,
+    transform: Transform,
+) -> Coroutine<'a, Input, Output, Result>
+where
+    Transform: Fn(Input) -> Coroutine<'a, Input, Output, InputNested> + Clone,
+{
+    let on_input =
+        move || -> Coroutine<Input, Output, InputNested> { bind(receive(), transform.clone()) };
+    let on_output = |o: Output| send(o);
+    run_child(on_input, on_output, co)
+}
+
+/// Transforms the output of coroutine A into B
+///
+/// This requires a coroutine that can map B outputs
+/// into a, as this is similar to running 'co'
+/// in the context of the output
+///
+/// This is a specialization of run_child
+///
+/// TLDR; change output with the output transform function
+pub fn transform_output<'a, Input: 'a, OutputA: 'a, OutputB: 'a, Transform: 'a, Result: 'a>(
+    co: Coroutine<'a, Input, OutputA, Result>,
+    transform: Transform,
+) -> Coroutine<'a, Input, OutputB, Result>
+where
+    Transform: Fn(OutputA) -> Coroutine<'a, Input, OutputB, OutputB>,
+{
+    let on_input = || receive();
+    let on_output = move |o: OutputA| bind(transform(o), send);
+    run_child(on_input, on_output, co)
+}
