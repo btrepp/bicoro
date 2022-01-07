@@ -34,20 +34,45 @@ where
 
 /// Runs a subroutine and converts it to the hosted type
 ///
-/// Converts a different subroutine to run inside this one.
-/// Note you need to be able to convert from inputs and  outputs.
-/// converting inputs may not be simple, so it can be it's own co-routine
+/// As the child subroutine may have different inputs and outputs
+/// you need to specify how to convert between these worlds.
+/// This is done by providing functions that yield coroutines that can be
+/// ran in the 'parent' context. One that is ran whenever the child needs an input
+/// and one that is ran when the child produces an output
+///
+/// These can simply proxy through to the parents context, or
+/// perform more processing. Both still retain inputs and outputs
+/// so they may call a parents recieve multiple times
 /// ```
 /// use bicoro::*;
+///
+/// /* Types in this example are written explicitly to highlight what they are
+///    It should be possible to use more compact forms
+/// */
+///
 /// // Reads a value, echos it, then returns 0u8
 /// let child: Coroutine<i64,i64,u8> = receive().and_then(send).and_then(|()| result(0u8));
-/// // all parent inputs are valid for the child here, so we just convert
-/// let map_input = | i:i32 | result(i as i64);
+///
+/// // an example where we require two inputs from the parent context, to one on the child
+/// // in this case we add the two i32's together to form an i64
+/// let on_input = | | -> Coroutine<i32,_,i64> {
+///     bind(receive(),|a| {
+///         map(receive(),move |b| {
+///             (a as i64+b as i64)
+///         })
+///     })
+/// };
+///
 /// // parent expects strings on it's output channel so we convert
-/// let map_output = | o:i64 | o.to_string();
+/// // note: type gaps used here as it must line up with the parent context types
+/// // also means it's possible to read from the parent context when producing output
+/// let on_output = | o:i64 | -> Coroutine<_,String,()> {
+///     send(o.to_string())
+/// };
 ///
 /// // run_child maps the child routine into the parenst 'world'
-/// let parent : Coroutine<i32,String,u8> = run_child(map_input,map_output,child);
+/// // we can see the type of this is the parent coroutine
+/// let parent : Coroutine<i32,String,u8> = run_child(on_input,on_output,child);
 /// ```
 pub fn run_child<
     'a,
@@ -55,33 +80,27 @@ pub fn run_child<
     Output: 'a,
     ChildInput: 'a,
     ChildOutput: 'a,
-    MapInputFunction: 'a,
-    MapOutputFunction: 'a,
+    OnInput: 'a,
+    OnOutput: 'a,
     Result: 'a,
 >(
-    map_input: MapInputFunction,
-    map_output: MapOutputFunction,
+    on_input: OnInput,
+    on_output: OnOutput,
     child: Coroutine<'a, ChildInput, ChildOutput, Result>,
 ) -> Coroutine<'a, Input, Output, Result>
 where
-    MapInputFunction: Fn(Input) -> Coroutine<'a, Input, Output, ChildInput> + Copy,
-    MapOutputFunction: Fn(ChildOutput) -> Output,
+    OnInput: Fn() -> Coroutine<'a, Input, Output, ChildInput>,
+    OnOutput: Fn(ChildOutput) -> Coroutine<'a, Input, Output, ()>,
 {
     match run_step(child) {
         StepResult::Done(r) => result(r),
         StepResult::Yield { output, next } => {
-            let output = map_output(output);
-            bind(send(output), move |()| {
-                run_child(map_input, map_output, *next)
-            })
+            let output = on_output(output);
+            bind(output, move |()| run_child(on_input, on_output, *next))
         }
-        StepResult::Next(n) => {
-            receive()
-                .and_then(move |i: Input| map_input(i))
-                .and_then(move |i| {
-                    let next = n(i);
-                    run_child(map_input, map_output, next)
-                })
-        }
+        StepResult::Next(n) => on_input().and_then(move |i| {
+            let next = n(i);
+            run_child(on_input, on_output, next)
+        }),
     }
 }
