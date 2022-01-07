@@ -27,7 +27,7 @@ pub fn map<'a, I: 'a, O: 'a, A: 'a, B: 'a, F: 'a>(
     map: F,
 ) -> Coroutine<'a, I, O, B>
 where
-    F: FnOnce(A) -> B,
+    F: FnOnce(A) -> B + Send + Sync,
 {
     bind(co, |a| result(map(a)))
 }
@@ -89,8 +89,10 @@ pub fn run_child<
     child: Coroutine<'a, ChildInput, ChildOutput, Result>,
 ) -> Coroutine<'a, Input, Output, Result>
 where
-    OnInput: Fn() -> Coroutine<'a, Input, Output, ChildInput>,
-    OnOutput: Fn(ChildOutput) -> Coroutine<'a, Input, Output, ()>,
+    OnInput: Fn() -> Coroutine<'a, Input, Output, ChildInput> + Send + Sync,
+    OnOutput: Fn(ChildOutput) -> Coroutine<'a, Input, Output, ()> + Send + Sync,
+    ChildOutput: Send + Sync,
+    Result: Send + Sync,
 {
     match run_step(child) {
         StepResult::Done(r) => result(r),
@@ -119,7 +121,9 @@ pub fn transform_input<'a, Input: 'a, InputNested: 'a, Output: 'a, Transform: 'a
     transform: Transform,
 ) -> Coroutine<'a, Input, Output, Result>
 where
-    Transform: Fn(Input) -> Coroutine<'a, Input, Output, InputNested> + Clone,
+    Transform: Fn(Input) -> Coroutine<'a, Input, Output, InputNested> + Send + Sync + Clone,
+    Output: Send + Sync,
+    Result: Send + Sync,
 {
     let on_input =
         move || -> Coroutine<Input, Output, InputNested> { bind(receive(), transform.clone()) };
@@ -141,7 +145,9 @@ pub fn transform_output<'a, Input: 'a, OutputA: 'a, OutputB: 'a, Transform: 'a, 
     transform: Transform,
 ) -> Coroutine<'a, Input, OutputB, Result>
 where
-    Transform: Fn(OutputA) -> Coroutine<'a, Input, OutputB, OutputB>,
+    Transform: Fn(OutputA) -> Coroutine<'a, Input, OutputB, OutputB> + Send + Sync,
+    Result: Send + Sync,
+    OutputA: Send + Sync,
 {
     let on_input = || receive();
     let on_output = move |o: OutputA| bind(transform(o), send);

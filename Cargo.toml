@@ -1,6 +1,6 @@
 [package]
 name = "bicoro"
-version = "0.2.3"
+version = "0.3.0"
 edition = "2021"
 readme = "README.md"
 description = "Bidirectional co-routine data structures"

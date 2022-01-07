@@ -5,7 +5,7 @@ use super::ResultCoroutine;
 impl<'a, I: 'a, O: 'a, A: 'a, E: 'a> ResultCoroutine<'a, I, O, A, E> {
     pub fn and_then<B: 'a, F: 'a>(self, f: F) -> ResultCoroutine<'a, I, O, B, E>
     where
-        F: FnOnce(A) -> ResultCoroutine<'a, I, O, B, E>,
+        F: FnOnce(A) -> ResultCoroutine<'a, I, O, B, E> + Send + Sync,
     {
         super::bind(self, f)
     }

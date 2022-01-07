@@ -19,7 +19,7 @@ pub struct Coroutine<'a, Input, Output, Result> {
 /// The internal state of the machine
 enum CoroutineState<'a, Input, Output, Result> {
     /// The coroutine is paused waiting for some-input
-    Await(Box<dyn FnOnce(Input) -> Coroutine<'a, Input, Output, Result> + 'a>),
+    Await(Box<dyn FnOnce(Input) -> Coroutine<'a, Input, Output, Result> + Send + Sync + 'a>),
     /// The coroutine is paused, waiting for a output to be consumed
     Yield(Output, Box<Coroutine<'a, Input, Output, Result>>),
     /// The coroutine is completed
@@ -47,7 +47,7 @@ pub fn result<'a, I, O, R>(r: R) -> Coroutine<'a, I, O, R> {
 /// let co :Coroutine<i32,(),String> = suspend(Box::new(|input:i32| result(input.to_string())));
 /// ```
 pub fn suspend<'a, I: 'a, O: 'a, R: 'a>(
-    f: Box<dyn FnOnce(I) -> Coroutine<'a, I, O, R> + 'a>,
+    f: Box<dyn FnOnce(I) -> Coroutine<'a, I, O, R> + Send + Sync + 'a>,
 ) -> Coroutine<'a, I, O, R> {
     let resume = CoroutineState::Await(f);
     Coroutine { resume }
@@ -81,7 +81,7 @@ pub fn bind<'a, I: 'a, O: 'a, RA: 'a, RB, F: 'a>(
     f: F,
 ) -> Coroutine<'a, I, O, RB>
 where
-    F: FnOnce(RA) -> Coroutine<'a, I, O, RB>,
+    F: FnOnce(RA) -> Coroutine<'a, I, O, RB> + Send + Sync,
 {
     match m.resume {
         CoroutineState::Done(ra) => f(ra),
@@ -123,7 +123,7 @@ pub enum StepResult<'a, Input, Output, Result> {
         next: Box<Coroutine<'a, Input, Output, Result>>,
     },
     /// The coroutine is suspended, awaiting input
-    Next(Box<dyn FnOnce(Input) -> Coroutine<'a, Input, Output, Result> + 'a>),
+    Next(Box<dyn FnOnce(Input) -> Coroutine<'a, Input, Output, Result> + Send + Sync + 'a>),
 }
 
 /// Runs a single step in the coroutine.

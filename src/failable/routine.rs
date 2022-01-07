@@ -51,7 +51,7 @@ pub fn bind<'a, I: 'a, O: 'a, A: 'a, B: 'a, E: 'a, F: 'a>(
     binder: F,
 ) -> ResultCoroutine<'a, I, O, B, E>
 where
-    F: FnOnce(A) -> ResultCoroutine<'a, I, O, B, E>,
+    F: FnOnce(A) -> ResultCoroutine<'a, I, O, B, E> + Send + Sync,
 {
     let co = crate::bind(result.co, |a| match a {
         Result::Ok(a) => binder(a).co,
