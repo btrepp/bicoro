@@ -14,6 +14,31 @@ pub fn receive<'a, I: 'a, O: 'a, E: 'a>() -> ResultCoroutine<'a, I, O, I, E> {
     lift(crate::map(crate::receive(), Result::Ok))
 }
 
+/// Changes the result value inside
+/// 
+/// Calls f inside the bind and maps returns the result
+pub fn map<'a,I:'a,O:'a,A:'a,B:'a,E:'a,F:'a>(co: ResultCoroutine<'a,I,O,A,E>, f:F) -> ResultCoroutine<'a,I,O,B,E>
+    where F: FnOnce(A) -> B {
+    bind(co, |a| result(f(a)))
+}
+
+/// Converts the error type
+/// 
+/// Handy to switch error types if you have different
+/// coroutines
+pub fn map_err<'a,I:'a,O:'a,R:'a,E1:'a,E2:'a,F:'a>(co: ResultCoroutine<'a,I,O,R,E1>, f:F) -> ResultCoroutine<'a,I,O,R,E2>
+    where F: FnOnce(E1) -> E2 {
+    let co = to_coroutine(co);
+    let mapper = | result| {
+        match result {
+            Result::Ok(e) => Result::Ok(e),
+            Result::Err(e1) => Result::Err(f(e1)),
+        }
+    };
+    lift(crate::map(co,mapper))    
+}
+
+
 /// Just like run step, but gives a result type inside
 ///
 /// see (function@run_step)
