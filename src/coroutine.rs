@@ -53,17 +53,6 @@ pub fn suspend<'a, I: 'a, O: 'a, R: 'a>(
     Coroutine { resume }
 }
 
-/// Suspend this coroutine until an input arrives
-///
-/// The result can be bound. Eg. the below reads a int and converts it into a string
-/// ```
-/// use bicoro::*;
-/// let co :Coroutine<i32,(),i32> = receive();
-/// ```
-pub fn receive<'a, I: 'a, O: 'a>() -> Coroutine<'a, I, O, I> {
-    suspend(Box::new(result))
-}
-
 /// Yields a value to the executor
 ///
 /// This pauses until the executor uses it

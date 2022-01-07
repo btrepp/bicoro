@@ -2,8 +2,11 @@
 
 mod compat;
 mod coroutine;
+mod functions;
 
 pub use crate::compat::*;
 pub use coroutine::*;
+pub use functions::*;
 
 pub mod executor;
+pub mod failable;
