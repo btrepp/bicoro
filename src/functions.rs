@@ -153,3 +153,22 @@ where
     let on_output = move |o: OutputA| bind(transform(o), send);
     run_child(on_input, on_output, co)
 }
+
+/// Runs recieve until f returns some
+/// 
+/// This is ran inside it's own coroutine, so
+/// you can call send inside it. 
+pub fn recieve_until<'a, Input: 'a, Output: 'a, Result: 'a, F: 'a>(
+    f: F,
+) -> Coroutine<'a, Input, Output, Result>
+where
+    F: Fn(Input) -> Coroutine<'a, Input, Output, Option<Result>> + Send + Sync + Clone,
+{    
+    let input = bind(receive(), f.clone());
+    bind(input,| opt| {
+        match opt {
+            Some(v) => result(v),
+            None => recieve_until(f)
+        }
+    })
+}

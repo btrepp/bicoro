@@ -29,11 +29,9 @@ pub enum Never {}
 
 /// Creates a new turnstile, in the locked state
 pub fn create<'a>() -> Coroutine<'a, Input, Output, Never> {
-
-    // recursive function. that takes the current state, input and 
+    // recursive function. that takes the current state, input and
     // gives a co-routine.
     fn on_input<'a>(state: State, input: Input) -> Coroutine<'a, Input, Output, Never> {
-
         // coroutine section that sends the output, and sets the next state
         let next = match (state, input) {
             (State::Locked, Input::Coin) => m! {
