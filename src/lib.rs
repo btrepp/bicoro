@@ -9,4 +9,3 @@ pub use coroutine::*;
 pub use functions::*;
 
 pub mod executor;
-pub mod failable;
