@@ -172,3 +172,50 @@ where
         }
     })
 }
+
+/// Runs two coroutines sequentially
+/// 
+/// This will run first until it completes, then second afterwards
+/// until it completes
+/// Returns both return results tupled together
+pub fn chain<'a, I: 'a, O: 'a, R1: 'a, R2:'a>(
+    first: Coroutine<'a, I, O, R1>,
+    second: Coroutine<'a, I, O, R2>,
+) -> Coroutine<'a, I, O, (R1,R2)>
+where
+    O: Send + Sync,
+    R1: Send + Sync,
+    R2: Send + Sync
+{
+    bind(first, |a| map(second,|b|(a,b)))
+}
+
+/// Runs a routine before the second routine
+/// 
+/// Do must return a unit type, when it completes
+/// then routine will be ran see also chain
+pub fn before<'a, I: 'a, O: 'a, R: 'a>(
+    r#do: Coroutine<'a, I, O, ()>,
+    routine: Coroutine<'a, I, O, R>,
+) -> Coroutine<'a, I, O, R>
+where
+    O: Send + Sync,
+    R: Send + Sync,
+{
+    map(chain(r#do, routine), |((),b)| b)
+}
+
+/// Runs a routine after this routine
+/// 
+/// Do must return a unit type, it will be ran after routine
+/// is completed, see also chain
+pub fn after<'a, I: 'a, O: 'a, R: 'a>(    
+    routine: Coroutine<'a, I, O, R>,
+    r#do: Coroutine<'a, I, O, ()>,
+) -> Coroutine<'a, I, O, R>
+where
+    O: Send + Sync,
+    R: Send + Sync,
+{
+    map(chain(routine, r#do), |(a,())| a)
+}
