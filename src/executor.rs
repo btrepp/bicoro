@@ -39,11 +39,11 @@ pub enum IteratorExecutorResult<'a, Iter, Input, Output, Result> {
 /// assert!(matches!(exec, IteratorExecutorResult::Completed{ result: (),..}));
 /// assert_eq!(outputs, vec![1]);
 /// ```
-pub fn execute_from_iter<'a, Iter, Input: 'a, Output: 'a, OnOutput, Result: 'a>(
-    mut routine: Coroutine<'a, Input, Output, Result>,
+pub fn execute_from_iter<Iter, Input, Output, OnOutput, Result>(
+    mut routine: Coroutine<Input, Output, Result>,
     mut on_output: OnOutput,
     mut events: Iter,
-) -> IteratorExecutorResult<'a, Iter, Input, Output, Result>
+) -> IteratorExecutorResult<Iter, Input, Output, Result>
 where
     Iter: Iterator<Item = Input>,
     OnOutput: FnMut(Output),

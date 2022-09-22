@@ -11,7 +11,7 @@ use super::*;
 /// use bicoro::*;
 /// let co :Coroutine<i32,(),i32> = receive();
 /// ```
-pub fn receive<'a, I: 'a, O: 'a>() -> Coroutine<'a, I, O, I> {
+pub fn receive<'a, I, O>() -> Coroutine<'a, I, O, I> {
     suspend(Box::new(result))
 }
 
@@ -22,14 +22,11 @@ pub fn receive<'a, I: 'a, O: 'a>() -> Coroutine<'a, I, O, I> {
 /// use bicoro::*;
 /// let co :Coroutine<i32,(),String> = map(receive(), |a| a.to_string());
 /// ```
-pub fn map<'a, I: 'a, O: 'a, A: 'a, B: 'a, F: 'a>(
-    co: Coroutine<'a, I, O, A>,
-    map: F,
-) -> Coroutine<'a, I, O, B>
+pub fn map<'a, I, O, A, B, F>(co: Coroutine<'a, I, O, A>, map: F) -> Coroutine<'a, I, O, B>
 where
-    F: FnOnce(A) -> B + Send + Sync,
+    F: FnOnce(A) -> B + 'a,
 {
-    bind(co, |a| result(map(a)))
+    bind(co, move |a| result(map(a)))
 }
 
 /// Runs a subroutine and converts it to the hosted type
@@ -74,25 +71,14 @@ where
 /// // we can see the type of this is the parent coroutine
 /// let parent : Coroutine<i32,String,u8> = run_child(on_input,on_output,child);
 /// ```
-pub fn run_child<
-    'a,
-    Input: 'a,
-    Output: 'a,
-    ChildInput: 'a,
-    ChildOutput: 'a,
-    OnInput: 'a,
-    OnOutput: 'a,
-    Result: 'a,
->(
+pub fn run_child<'a, Input, Output, ChildInput, ChildOutput, OnInput, OnOutput, Result>(
     on_input: OnInput,
     on_output: OnOutput,
     child: Coroutine<'a, ChildInput, ChildOutput, Result>,
 ) -> Coroutine<'a, Input, Output, Result>
 where
-    OnInput: Fn() -> Coroutine<'a, Input, Output, ChildInput> + Send + Sync,
-    OnOutput: Fn(ChildOutput) -> Coroutine<'a, Input, Output, ()> + Send + Sync,
-    ChildOutput: Send + Sync,
-    Result: Send + Sync,
+    OnInput: Fn() -> Coroutine<'a, Input, Output, ChildInput> + 'a,
+    OnOutput: Fn(ChildOutput) -> Coroutine<'a, Input, Output, ()> + 'a,
 {
     match run_step(child) {
         StepResult::Done(r) => result(r),
@@ -100,10 +86,14 @@ where
             let output = on_output(output);
             bind(output, move |()| run_child(on_input, on_output, *next))
         }
-        StepResult::Next(n) => on_input().and_then(move |i| {
-            let next = n(i);
-            run_child(on_input, on_output, next)
-        }),
+        StepResult::Next(n) => {
+            let rout = on_input();
+            let cont = move |i| {
+                let next = n(i);
+                run_child(on_input, on_output, next)
+            };
+            bind(rout, cont)
+        }
     }
 }
 
@@ -116,14 +106,12 @@ where
 /// This is a specialization of run_child
 ///
 /// TLDR; change Input with the inform transform function
-pub fn transform_input<'a, Input: 'a, InputNested: 'a, Output: 'a, Transform: 'a, Result: 'a>(
+pub fn transform_input<'a, Input, InputNested, Output, Transform, Result>(
     co: Coroutine<'a, InputNested, Output, Result>,
     transform: Transform,
 ) -> Coroutine<'a, Input, Output, Result>
 where
-    Transform: Fn(Input) -> Coroutine<'a, Input, Output, InputNested> + Send + Sync + Clone,
-    Output: Send + Sync,
-    Result: Send + Sync,
+    Transform: Fn(Input) -> Coroutine<'a, Input, Output, InputNested> + Clone + 'a,
 {
     let on_input =
         move || -> Coroutine<Input, Output, InputNested> { bind(receive(), transform.clone()) };
@@ -140,12 +128,12 @@ where
 /// This is a specialization of run_child
 ///
 /// TLDR; change output with the output transform function
-pub fn transform_output<'a, Input: 'a, OutputA: 'a, OutputB: 'a, Transform: 'a, Result: 'a>(
+pub fn transform_output<'a, Input, OutputA, OutputB, Transform, Result>(
     co: Coroutine<'a, Input, OutputA, Result>,
     transform: Transform,
 ) -> Coroutine<'a, Input, OutputB, Result>
 where
-    Transform: Fn(OutputA) -> Coroutine<'a, Input, OutputB, OutputB> + Send + Sync,
+    Transform: Fn(OutputA) -> Coroutine<'a, Input, OutputB, OutputB> + 'a,
     Result: Send + Sync,
     OutputA: Send + Sync,
 {
@@ -155,67 +143,58 @@ where
 }
 
 /// Runs recieve until f returns some
-/// 
+///
 /// This is ran inside it's own coroutine, so
-/// you can call send inside it. 
-pub fn recieve_until<'a, Input: 'a, Output: 'a, Result: 'a, F: 'a>(
-    f: F,
-) -> Coroutine<'a, Input, Output, Result>
+/// you can call send inside it.
+pub fn recieve_until<'a, Input, Output, Result, F>(f: F) -> Coroutine<'a, Input, Output, Result>
 where
-    F: Fn(Input) -> Coroutine<'a, Input, Output, Option<Result>> + Send + Sync + Clone,
-{    
+    F: Fn(Input) -> Coroutine<'a, Input, Output, Option<Result>> + Clone + 'a,
+{
     let input = bind(receive(), f.clone());
-    bind(input,| opt| {
-        match opt {
-            Some(v) => result(v),
-            None => recieve_until(f)
-        }
+    bind(input, |opt| match opt {
+        Some(v) => result(v),
+        None => recieve_until(f),
     })
 }
 
 /// Runs two coroutines sequentially
-/// 
+///
 /// This will run first until it completes, then second afterwards
 /// until it completes
 /// Returns both return results tupled together
-pub fn chain<'a, I: 'a, O: 'a, R1: 'a, R2:'a>(
+pub fn tuple<'a, I, O, R1, R2>(
     first: Coroutine<'a, I, O, R1>,
     second: Coroutine<'a, I, O, R2>,
-) -> Coroutine<'a, I, O, (R1,R2)>
-where
-    O: Send + Sync,
-    R1: Send + Sync,
-    R2: Send + Sync
-{
-    bind(first, |a| map(second,|b|(a,b)))
+) -> Coroutine<'a, I, O, (R1, R2)> {
+    bind(first, move |a| map(second, move |b| (a, b)))
 }
 
 /// Runs a routine before the second routine
-/// 
-/// Do must return a unit type, when it completes
-/// then routine will be ran see also chain
-pub fn before<'a, I: 'a, O: 'a, R: 'a>(
-    r#do: Coroutine<'a, I, O, ()>,
-    routine: Coroutine<'a, I, O, R>,
-) -> Coroutine<'a, I, O, R>
-where
-    O: Send + Sync,
-    R: Send + Sync,
-{
-    map(chain(r#do, routine), |((),b)| b)
+///
+/// Result of the first routine is ignored, second is returned
+/// if you need both results, use tuple
+pub fn right<'a, I, O, A, B>(
+    left: Coroutine<'a, I, O, A>,
+    right: Coroutine<'a, I, O, B>,
+) -> Coroutine<'a, I, O, B> {
+    map(tuple(left, right), |(_, b)| b)
 }
 
-/// Runs a routine after this routine
-/// 
-/// Do must return a unit type, it will be ran after routine
-/// is completed, see also chain
-pub fn after<'a, I: 'a, O: 'a, R: 'a>(    
-    routine: Coroutine<'a, I, O, R>,
-    r#do: Coroutine<'a, I, O, ()>,
-) -> Coroutine<'a, I, O, R>
-where
-    O: Send + Sync,
-    R: Send + Sync,
-{
-    map(chain(routine, r#do), |(a,())| a)
+/// Runs a routine before the second routine
+///
+/// Result of the first routine is returned, second is ignored
+/// if you need both results, use tuple
+pub fn left<'a, I, O, A, B>(
+    left: Coroutine<'a, I, O, A>,
+    right: Coroutine<'a, I, O, B>,
+) -> Coroutine<'a, I, O, A> {
+    map(tuple(left, right), |(a, _)| a)
+}
+
+/// Converts the return result to the unit type
+///
+/// Useful when you don't care what the coroutine occurs
+/// mainly after its effects
+pub fn void<'a, I, O, A>(co: Coroutine<'a, I, O, A>) -> Coroutine<'a, I, O, ()> {
+    map(co, |_| ())
 }
