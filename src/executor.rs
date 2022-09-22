@@ -5,23 +5,30 @@
 
 use crate::*;
 
-pub enum IteratorExecutorResult<'a, Iter, Input, Output, Result> {
+pub enum IteratorExecutorResult<'a, It, Input, Output, Result> {
     /// The coroutine has finished
     Completed {
         /// The final result of the coroutine
         result: Result,
-        /// What remains of the input
-        remaining: Iter,
+        remaining: It,
+    },
+    Output {
+        /// Value emitted
+        output: Output,
+        co: Coroutine<'a, Input, Output, Result>,
+        remaining: It,
     },
     /// We ran out of inputs, returns a coroutine to continue when more inputs are
     /// available
-    OutOfInputs(Coroutine<'a, Input, Output, Result>),
+    Exhausted {
+        co: Box<dyn FnOnce(Input) -> Coroutine<'a, Input, Output, Result> + 'a>,
+    },
 }
 
 /// Consumes a coroutine and runs it with the iterated events
 /// This may run to completion, or may consume all the inputs
-/// The on_output function is called whenever a output is produced
-/// Note: it's expected that shouldn't ever panic
+/// Returns whenever an output is produced, and returns the remaining
+/// iterator and coroutine so it can be called again
 /// ```
 /// use bicoro::*;
 /// use bicoro::executor::*;
@@ -39,14 +46,12 @@ pub enum IteratorExecutorResult<'a, Iter, Input, Output, Result> {
 /// assert!(matches!(exec, IteratorExecutorResult::Completed{ result: (),..}));
 /// assert_eq!(outputs, vec![1]);
 /// ```
-pub fn execute_from_iter<Iter, Input, Output, OnOutput, Result>(
-    mut routine: Coroutine<Input, Output, Result>,
-    mut on_output: OnOutput,
+pub fn run_until_output<'a, Iter, Input, Output, Result>(
+    mut routine: Coroutine<'a, Input, Output, Result>,
     mut events: Iter,
-) -> IteratorExecutorResult<Iter, Input, Output, Result>
+) -> IteratorExecutorResult<'a, Iter, Input, Output, Result>
 where
     Iter: Iterator<Item = Input>,
-    OnOutput: FnMut(Output),
 {
     loop {
         match run_step(routine) {
@@ -57,15 +62,17 @@ where
                 }
             }
             StepResult::Yield { output, next } => {
-                on_output(output);
-                routine = *next;
+                return IteratorExecutorResult::Output {
+                    output,
+                    remaining: events,
+                    co: *next,
+                };
             }
             StepResult::Next(next) => {
                 if let Some(event) = events.next() {
                     routine = next(event);
                 } else {
-                    let next = suspend(next);
-                    return IteratorExecutorResult::OutOfInputs(next);
+                    return IteratorExecutorResult::Exhausted { co: next };
                 }
             }
         }
@@ -81,60 +88,48 @@ mod tests {
     fn not_enough_input_data() {
         let test: Co<i32, (), i32> = receive();
         let inputs = vec![];
-        let mut output = vec![];
-        let on_output = |o| output.push(o);
 
-        let exec = execute_from_iter(test, on_output, inputs.into_iter());
+        let exec = run_until_output(test, inputs.into_iter());
 
-        assert!(matches!(exec, IteratorExecutorResult::OutOfInputs(_)));
-        assert_eq!(output, vec![]);
+        assert!(matches!(exec, IteratorExecutorResult::Exhausted { .. }));
     }
 
     #[test]
     fn instantly_completes() {
         let test: Co<(), (), i32> = result(1);
         let inputs = vec![];
-        let mut output = vec![];
-        let on_output = |o| output.push(o);
 
-        let exec = execute_from_iter(test, on_output, inputs.into_iter());
+        let exec = run_until_output(test, inputs.into_iter());
 
         assert!(matches!(
             exec,
             IteratorExecutorResult::Completed { result: 1, .. }
         ));
-        assert_eq!(output, vec![]);
     }
 
     #[test]
     fn send_writes_to_vec() {
         let test: Co<(), i32, ()> = send(1);
         let inputs = vec![];
-        let mut output = vec![];
-        let on_output = |o| output.push(o);
 
-        let exec = execute_from_iter(test, on_output, inputs.into_iter());
+        let exec = run_until_output(test, inputs.into_iter());
 
         assert!(matches!(
             exec,
-            IteratorExecutorResult::Completed { result: (), .. }
+            IteratorExecutorResult::Output { output: 1, .. }
         ));
-        assert_eq!(output, vec![1]);
     }
 
     #[test]
     fn send_writes_multiple_to_vec() {
         let test: Co<(), i32, ()> = send(1).and_then(|()| send(2));
         let inputs = vec![];
-        let mut output = vec![];
-        let on_output = |o| output.push(o);
 
-        let exec = execute_from_iter(test, on_output, inputs.into_iter());
+        let exec = run_until_output(test, inputs.into_iter());
 
         assert!(matches!(
             exec,
-            IteratorExecutorResult::Completed { result: (), .. }
+            IteratorExecutorResult::Output { output: 1, .. }
         ));
-        assert_eq!(output, vec![1, 2]);
     }
 }

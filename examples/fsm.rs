@@ -1,4 +1,4 @@
-use bicoro::{executor::execute_from_iter, Coroutine};
+use bicoro::{iterator::as_iterator, Coroutine};
 mod turnstile;
 use turnstile::{create, Input, Never, Output};
 
@@ -21,7 +21,10 @@ pub fn main() {
         Input::Push, // locked
         Input::Push, // no change
     ];
-    let on_output = |o| println!("Turnstile Says:{}", o);
 
-    let _ = execute_from_iter(turnstile, on_output, inputs.into_iter());
+    let it = as_iterator(turnstile, inputs.into_iter());
+
+    for event in it {
+        println!("Turnstile Says:{}", event);
+    }
 }

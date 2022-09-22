@@ -11,3 +11,4 @@ pub use functions::*;
 pub use race::*;
 
 pub mod executor;
+pub mod iterator;
