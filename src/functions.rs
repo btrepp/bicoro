@@ -134,8 +134,6 @@ pub fn transform_output<'a, Input, OutputA, OutputB, Transform, Result>(
 ) -> Coroutine<'a, Input, OutputB, Result>
 where
     Transform: Fn(OutputA) -> Coroutine<'a, Input, OutputB, OutputB> + 'a,
-    Result: Send + Sync,
-    OutputA: Send + Sync,
 {
     let on_input = || receive();
     let on_output = move |o: OutputA| bind(transform(o), send);
