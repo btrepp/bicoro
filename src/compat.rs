@@ -5,10 +5,10 @@
 //! It's not necessary to use the library, but does help with callback hell
 //!```
 //! use bicoro::*;
-//! use bicoro::executor::*;
+//! use bicoro::iterator::*;
 //! use ::do_notation::m;
 //!
-//! // The coroutine in dot-notation
+//! // The coroutine in do-notation
 //! let co : Coroutine<i32,String,()> =
 //!        m! {
 //!            value_1 <- receive();
@@ -21,13 +21,11 @@
 //!
 //! // Execute
 //! let inputs = vec![1,2];
-//! let mut outputs = vec![];
-//! let on_output = |output:String| outputs.push(output);
-//! let exec = execute_from_iter(co,on_output,inputs.into_iter());
+//! let it = as_iterator(co,inputs.into_iter());
+//! let values = it.collect::<Vec<_>>();
 //!
 //! // Verify
-//! assert!(matches!(exec, IteratorExecutorResult::Completed{result:(),..}));
-//! assert_eq!(outputs, vec!["3"]);
+//! assert_eq!(values, vec!["3"]);
 //!```
 use crate::*;
 use ::do_notation::Lift;
@@ -41,7 +39,7 @@ impl<'a, I, O, R> compat::Lift<R> for Coroutine<'a, I, O, R> {
     }
 }
 
-impl<'a, I: 'a, O: 'a, R: 'a> Coroutine<'a, I, O, R> {
+impl<'a, I, O, R> Coroutine<'a, I, O, R> {
     /// Chains coroutines
     ///
     /// see [bind](function@bind)  

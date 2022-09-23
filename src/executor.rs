@@ -38,13 +38,10 @@ pub enum IteratorExecutorResult<'a, It, Input, Output, Result> {
 ///
 /// // inputs to send
 /// let inputs = vec![1];
-/// let mut outputs = vec![];
-/// let on_output = |output:i32| outputs.push(output);
 ///
-/// let exec = execute_from_iter(co,on_output,inputs.into_iter());
+/// let exec = run_until_output(co,inputs.into_iter());
 ///
-/// assert!(matches!(exec, IteratorExecutorResult::Completed{ result: (),..}));
-/// assert_eq!(outputs, vec![1]);
+/// assert!(matches!(exec, IteratorExecutorResult::Output{ output: 1,..}));
 /// ```
 pub fn run_until_output<'a, Iter, Input, Output, Result>(
     mut routine: Coroutine<'a, Input, Output, Result>,

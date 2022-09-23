@@ -10,7 +10,7 @@ This is a more generic form of Future.
 
 ```rust
 use bicoro::*;
-use bicoro::executor::*;
+use bicoro::iterator::*;
 use ::do_notation::m;
  
 // The coroutine in dot-notation
@@ -26,15 +26,22 @@ let co : Coroutine<i32,String,()> =
  
 // Arrange inputs and an store outputs in a vec
 let inputs = vec![1,2];
-let mut outputs = vec![];
-let on_output = |output:String| outputs.push(output);
 
-// run (and consume the inputs), mutate the output
-let exec = execute_from_iter(co,on_output,inputs.into_iter());
- 
-// Verify
-assert!(matches!(exec, IteratorExecutorResult::Completed{result: (),..}));
+// creates an interator of outputs, fed via the inputs
+let mut it = as_iterator(co,inputs.into_iter());
+
+// By ref so we don't consume the iterator (important if
+// we want to get the remaining inputs or coroutine)
+let outputs = it.by_ref().collect::<Vec<_>>();
+// Verify output values
 assert_eq!(outputs, vec!["3"]); 
+
+// Consume the iterator, so that we can check results
+let (result,mut remaining_inputs) = it.finish();
+// We return the result from the coroutine.
+assert!(matches!(result,Result::Ok(())));
+// All the inputs from the iterator were consumed
+assert!(matches!(remaining_inputs.next(),None));
 ```
 
 ## Executing

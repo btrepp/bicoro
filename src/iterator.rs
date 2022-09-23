@@ -10,6 +10,8 @@ pub struct CoroutineIterator<'a, It, I, O, R>
 where
     It: Iterator<Item = I>,
 {
+    //Todo, this is probably better represented as an enum
+    //it does work though, if we are careful, and it is internal state
     co: Option<Coroutine<'a, I, O, R>>,
     result: Option<R>,
     inputs: Option<It>,
@@ -62,8 +64,13 @@ impl<'a, It, I, O, R> CoroutineIterator<'a, It, I, O, R>
 where
     It: Iterator<Item = I>,
 {
-    pub fn finish(self) -> (Option<Coroutine<'a, I, O, R>>, It) {
-        (self.co, self.inputs.unwrap())
+    pub fn finish(self) -> (Result<R, Coroutine<'a, I, O, R>>, It) {
+        let rem = self.inputs.unwrap();
+        match (self.result, self.co) {
+            (Some(result), None) => (Result::Ok(result), rem),
+            (None, Some(co)) => (Result::Err(co), rem),
+            _ => panic!("Invalid state. This is a bug"),
+        }
     }
 }
 

@@ -100,14 +100,11 @@ where
 /// If one finishes first, the other will consume the inputs until it is finished.
 /// Both routines must finish to return
 /// Input must be copyable, as it will need to feed both
-pub fn broadcast<'a, I: 'a, O: 'a, A: 'a, B: 'a>(
+pub fn broadcast<'a, I, O, A, B>(
     first: Coroutine<'a, I, O, A>,
     second: Coroutine<'a, I, O, B>,
 ) -> Coroutine<'a, I, O, (A, B)>
 where
-    O: Send + Sync,
-    A: Send + Sync,
-    B: Send + Sync,
     I: Clone,
 {
     let rr = race(first, second);
