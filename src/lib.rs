@@ -2,13 +2,13 @@
 
 mod compat;
 mod coroutine;
+mod dispatch;
 mod functions;
-mod race;
 
 pub use crate::compat::*;
 pub use coroutine::*;
+pub use dispatch::*;
 pub use functions::*;
-pub use race::*;
 
 pub mod executor;
 pub mod iterator;
