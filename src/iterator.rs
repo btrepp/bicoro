@@ -64,11 +64,10 @@ impl<'a, It, I, O, R> CoroutineIterator<'a, It, I, O, R>
 where
     It: Iterator<Item = I>,
 {
-    pub fn finish(self) -> (Result<R, Coroutine<'a, I, O, R>>, It) {
-        let rem = self.inputs.unwrap();
+    pub fn finish(self) -> (Result<R, Coroutine<'a, I, O, R>>, Option<It>) {
         match (self.result, self.co) {
-            (Some(result), None) => (Result::Ok(result), rem),
-            (None, Some(co)) => (Result::Err(co), rem),
+            (Some(result), None) => (Result::Ok(result), self.inputs),
+            (None, Some(co)) => (Result::Err(co), self.inputs),
             _ => panic!("Invalid state. This is a bug"),
         }
     }
