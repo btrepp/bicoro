@@ -24,7 +24,7 @@ pub fn receive<'a, I, O>() -> Coroutine<'a, I, O, I> {
 /// ```
 pub fn map<'a, I, O, A, B, F>(co: Coroutine<'a, I, O, A>, map: F) -> Coroutine<'a, I, O, B>
 where
-    F: FnOnce(A) -> B + 'a,
+    F: FnOnce(A) -> B + Send + 'a,
 {
     bind(co, move |a| result(map(a)))
 }
@@ -77,8 +77,10 @@ pub fn run_child<'a, Input, Output, ChildInput, ChildOutput, OnInput, OnOutput, 
     child: Coroutine<'a, ChildInput, ChildOutput, Result>,
 ) -> Coroutine<'a, Input, Output, Result>
 where
-    OnInput: Fn() -> Coroutine<'a, Input, Output, ChildInput> + 'a,
-    OnOutput: Fn(ChildOutput) -> Coroutine<'a, Input, Output, ()> + 'a,
+    OnInput: Fn() -> Coroutine<'a, Input, Output, ChildInput> + Send + 'a,
+    OnOutput: Fn(ChildOutput) -> Coroutine<'a, Input, Output, ()> + Send + 'a,
+    ChildOutput: Send,
+    Result: Send,
 {
     match run_step(child) {
         StepResult::Done(r) => result(r),
@@ -111,7 +113,9 @@ pub fn transform_input<'a, Input, InputNested, Output, Transform, Result>(
     transform: Transform,
 ) -> Coroutine<'a, Input, Output, Result>
 where
-    Transform: Fn(Input) -> Coroutine<'a, Input, Output, InputNested> + Clone + 'a,
+    Transform: Fn(Input) -> Coroutine<'a, Input, Output, InputNested> + Send + Clone + 'a,
+    Result: Send,
+    Output: Send,
 {
     let on_input =
         move || -> Coroutine<Input, Output, InputNested> { bind(receive(), transform.clone()) };
@@ -133,7 +137,9 @@ pub fn transform_output<'a, Input, OutputA, OutputB, Transform, Result>(
     transform: Transform,
 ) -> Coroutine<'a, Input, OutputB, Result>
 where
-    Transform: Fn(OutputA) -> Coroutine<'a, Input, OutputB, OutputB> + 'a,
+    Transform: Fn(OutputA) -> Coroutine<'a, Input, OutputB, OutputB> + Send + 'a,
+    Result: Send,
+    OutputA: Send,
 {
     let on_input = || receive();
     let on_output = move |o: OutputA| bind(transform(o), send);
@@ -146,7 +152,7 @@ where
 /// you can call send inside it.
 pub fn recieve_until<'a, Input, Output, Result, F>(f: F) -> Coroutine<'a, Input, Output, Result>
 where
-    F: Fn(Input) -> Coroutine<'a, Input, Output, Option<Result>> + Clone + 'a,
+    F: Fn(Input) -> Coroutine<'a, Input, Output, Option<Result>> + Send + Clone + 'a,
 {
     let input = bind(receive(), f.clone());
     bind(input, |opt| match opt {
@@ -163,7 +169,12 @@ where
 pub fn tuple<'a, I, O, R1, R2>(
     first: Coroutine<'a, I, O, R1>,
     second: Coroutine<'a, I, O, R2>,
-) -> Coroutine<'a, I, O, (R1, R2)> {
+) -> Coroutine<'a, I, O, (R1, R2)>
+where
+    R1: Send,
+    R2: Send,
+    O: Send,
+{
     bind(first, move |a| map(second, move |b| (a, b)))
 }
 
@@ -174,7 +185,12 @@ pub fn tuple<'a, I, O, R1, R2>(
 pub fn right<'a, I, O, A, B>(
     left: Coroutine<'a, I, O, A>,
     right: Coroutine<'a, I, O, B>,
-) -> Coroutine<'a, I, O, B> {
+) -> Coroutine<'a, I, O, B>
+where
+    O: Send,
+    A: Send,
+    B: Send,
+{
     map(tuple(left, right), |(_, b)| b)
 }
 
@@ -185,7 +201,12 @@ pub fn right<'a, I, O, A, B>(
 pub fn left<'a, I, O, A, B>(
     left: Coroutine<'a, I, O, A>,
     right: Coroutine<'a, I, O, B>,
-) -> Coroutine<'a, I, O, A> {
+) -> Coroutine<'a, I, O, A>
+where
+    O: Send,
+    A: Send,
+    B: Send,
+{
     map(tuple(left, right), |(a, _)| a)
 }
 

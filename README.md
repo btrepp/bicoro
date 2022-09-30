@@ -41,7 +41,7 @@ let (result,mut remaining_inputs) = it.finish();
 // We return the result from the coroutine.
 assert!(matches!(result,Result::Ok(())));
 // All the inputs from the iterator were consumed
-assert!(matches!(remaining_inputs.next(),None));
+assert!(matches!(remaining_inputs.unwrap().next(),None));
 ```
 
 ## Executing

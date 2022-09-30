@@ -21,7 +21,7 @@ pub enum IteratorExecutorResult<'a, It, Input, Output, Result> {
     /// We ran out of inputs, returns a coroutine to continue when more inputs are
     /// available
     Exhausted {
-        co: Box<dyn FnOnce(Input) -> Coroutine<'a, Input, Output, Result> + 'a>,
+        co: Box<dyn FnOnce(Input) -> Coroutine<'a, Input, Output, Result> + Send + 'a>,
     },
 }
 

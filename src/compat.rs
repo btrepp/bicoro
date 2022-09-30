@@ -45,7 +45,7 @@ impl<'a, I, O, R> Coroutine<'a, I, O, R> {
     /// see [bind](function@bind)  
     pub fn and_then<F: 'a, B>(self, f: F) -> Coroutine<'a, I, O, B>
     where
-        F: FnOnce(R) -> Coroutine<'a, I, O, B>,
+        F: FnOnce(R) -> Coroutine<'a, I, O, B> + Send,
     {
         bind(self, f)
     }

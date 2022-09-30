@@ -35,8 +35,11 @@ pub fn dispatch<'a, I, IA, IB, IAB, O, A, B, F>(
     second: Coroutine<'a, IB, O, B>,
 ) -> Coroutine<'a, I, O, DispatchResult<'a, IA, IB, O, A, B>>
 where
-    F: Fn(I) -> Select<IA, IB, IAB> + 'a,
+    F: Fn(I) -> Select<IA, IB, IAB> + Send + 'a,
     IAB: Into<IA> + Into<IB> + Clone,
+    O: Send,
+    A: Send,
+    B: Send,
 {
     let s1 = run_step(first);
     let s2 = run_step(second);
@@ -127,6 +130,9 @@ pub fn broadcast<'a, I, O, A, B>(
 ) -> Coroutine<'a, I, O, DispatchResult<'a, I, I, O, A, B>>
 where
     I: Clone,
+    A: Send,
+    B: Send,
+    O: Send,
 {
     fn both_selector<I>(input: I) -> Select<I, I, I> {
         Select::Both(input)
@@ -146,6 +152,9 @@ pub fn broadcast_until_finished<'a, I, O, A, B>(
 ) -> Coroutine<'a, I, O, (A, B)>
 where
     I: Clone,
+    A: Send,
+    B: Send,
+    O: Send,
 {
     let rr = broadcast(first, second);
     let on_result = |res| match res {
@@ -172,7 +181,10 @@ pub fn unicast<'a, I, IA, IB, O, A, B, F>(
     second: Coroutine<'a, IB, O, B>,
 ) -> Coroutine<'a, I, O, DispatchResult<'a, IA, IB, O, A, B>>
 where
-    F: Fn(I) -> UnicastSelect<IA, IB> + 'a,
+    F: Fn(I) -> UnicastSelect<IA, IB> + Send + 'a,
+    O: Send,
+    A: Send,
+    B: Send,
 {
     // Private never type. Used for some trickery in unicast to cover into
     // for a type never used
@@ -227,7 +239,10 @@ pub fn unicast_until_finished<'a, I, IA, IB, O, A, B, F>(
     second: Coroutine<'a, IB, O, B>,
 ) -> Coroutine<'a, I, O, (A, B)>
 where
-    F: Fn(I) -> UnicastSelect<IA, IB> + Clone + 'a,
+    F: Fn(I) -> UnicastSelect<IA, IB> + Clone + Send + 'a,
+    O: Send,
+    A: Send,
+    B: Send,
 {
     let ib_selector = selector.clone();
     let is_ib = move |input: I| match ib_selector(input) {
