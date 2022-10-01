@@ -141,7 +141,7 @@ pub enum StepResult<'a, Input, Output, Result> {
 /// let sr = run_step(co);
 /// assert!(matches!(sr, StepResult::Next(_)));
 /// ```
-pub fn run_step<'a, I, O, R>(routine: Coroutine<'a, I, O, R>) -> StepResult<'a, I, O, R> {
+pub fn run_step<I, O, R>(routine: Coroutine<I, O, R>) -> StepResult<I, O, R> {
     match routine.resume {
         CoroutineState::Done(result) => StepResult::Done(result),
         CoroutineState::Await(run) => StepResult::Next(run),

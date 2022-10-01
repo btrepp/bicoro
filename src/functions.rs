@@ -119,8 +119,7 @@ where
 {
     let on_input =
         move || -> Coroutine<Input, Output, InputNested> { bind(receive(), transform.clone()) };
-    let on_output = |o: Output| send(o);
-    run_child(on_input, on_output, co)
+    run_child(on_input, send, co)
 }
 
 /// Transforms the output of coroutine A into B
@@ -137,13 +136,11 @@ pub fn transform_output<'a, Input, OutputA, OutputB, Transform, Result>(
     transform: Transform,
 ) -> Coroutine<'a, Input, OutputB, Result>
 where
-    Transform: Fn(OutputA) -> Coroutine<'a, Input, OutputB, OutputB> + Send + 'a,
+    Transform: Fn(OutputA) -> Coroutine<'a, Input, OutputB, ()> + Send + 'a,
     Result: Send,
     OutputA: Send,
 {
-    let on_input = || receive();
-    let on_output = move |o: OutputA| bind(transform(o), send);
-    run_child(on_input, on_output, co)
+    run_child(receive, transform, co)
 }
 
 /// Runs recieve until f returns some
@@ -214,6 +211,6 @@ where
 ///
 /// Useful when you don't care what the coroutine occurs
 /// mainly after its effects
-pub fn void<'a, I, O, A>(co: Coroutine<'a, I, O, A>) -> Coroutine<'a, I, O, ()> {
+pub fn void<I, O, A>(co: Coroutine<I, O, A>) -> Coroutine<I, O, ()> {
     map(co, |_| ())
 }

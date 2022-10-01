@@ -24,7 +24,7 @@ pub fn needs_input() -> Coroutine<'static, Input, Output, turnstile::Input> {
             "coin" => result(turnstile::Input::Coin),
             other => {
                 let error = format!("Turnstile: 'I don't understand {}' \r\n", other);
-                let prompt = format!("What do you try instead: ");
+                let prompt = "What do you try instead?".to_string();
 
                 send(Output::StdErr(error))
                     .and_then(|()| send(Output::StdOut(prompt)))

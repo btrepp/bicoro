@@ -28,10 +28,9 @@ where
         let mut it = None;
         std::mem::swap(&mut self.co, &mut co);
         std::mem::swap(&mut self.inputs, &mut it);
-        if co.is_some() && it.is_some() {
-            let co = co.unwrap();
-            let it = it.unwrap();
-            match run_until_output(co, it) {
+
+        match (co, it) {
+            (Some(co), Some(it)) => match run_until_output(co, it) {
                 IteratorExecutorResult::Completed { result, remaining } => {
                     std::mem::swap(&mut self.inputs, &mut Some(remaining));
                     self.result = Some(result);
@@ -51,20 +50,22 @@ where
                     std::mem::swap(&mut self.co, &mut Some(co));
                     None
                 }
+            },
+            (mut co, mut it) => {
+                std::mem::swap(&mut self.co, &mut co);
+                std::mem::swap(&mut self.inputs, &mut it);
+                None
             }
-        } else {
-            std::mem::swap(&mut self.co, &mut co);
-            std::mem::swap(&mut self.inputs, &mut it);
-            None
         }
     }
 }
 
+type CoroutineIteratorResult<'a, I, O, R> = Result<R, Coroutine<'a, I, O, R>>;
 impl<'a, It, I, O, R> CoroutineIterator<'a, It, I, O, R>
 where
     It: Iterator<Item = I>,
 {
-    pub fn finish(self) -> (Result<R, Coroutine<'a, I, O, R>>, Option<It>) {
+    pub fn finish(self) -> (CoroutineIteratorResult<'a, I, O, R>, Option<It>) {
         match (self.result, self.co) {
             (Some(result), None) => (Result::Ok(result), self.inputs),
             (None, Some(co)) => (Result::Err(co), self.inputs),
@@ -73,10 +74,10 @@ where
     }
 }
 
-pub fn as_iterator<'a, I, O, R, It>(
-    co: Coroutine<'a, I, O, R>,
+pub fn as_iterator<I, O, R, It>(
+    co: Coroutine<I, O, R>,
     inputs: It,
-) -> CoroutineIterator<'a, It, I, O, R>
+) -> CoroutineIterator<It, I, O, R>
 where
     It: Iterator<Item = I>,
 {

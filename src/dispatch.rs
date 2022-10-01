@@ -224,8 +224,7 @@ where
     let first = transform_input(first, |input: Wrapped<IA>| result(input.0));
     let second = transform_input(second, |input: Wrapped<IB>| result(input.0));
     let both = dispatch(selector_, first, second);
-    let mapped = map(both, extract);
-    mapped
+    map(both, extract)
 }
 
 /// Unicast until both routines are completed
@@ -270,6 +269,6 @@ where
             map(remaining, |a| (a, value))
         }
     };
-    let ur = unicast(selector.clone(), first, second);
+    let ur = unicast(selector, first, second);
     bind(ur, on_result)
 }

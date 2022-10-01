@@ -43,10 +43,10 @@ pub enum IteratorExecutorResult<'a, It, Input, Output, Result> {
 ///
 /// assert!(matches!(exec, IteratorExecutorResult::Output{ output: 1,..}));
 /// ```
-pub fn run_until_output<'a, Iter, Input, Output, Result>(
-    mut routine: Coroutine<'a, Input, Output, Result>,
+pub fn run_until_output<Iter, Input, Output, Result>(
+    mut routine: Coroutine<Input, Output, Result>,
     mut events: Iter,
-) -> IteratorExecutorResult<'a, Iter, Input, Output, Result>
+) -> IteratorExecutorResult<Iter, Input, Output, Result>
 where
     Iter: Iterator<Item = Input>,
 {
