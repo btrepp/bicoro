@@ -16,6 +16,11 @@ pub struct Coroutine<'a, Input, Output, Result> {
     resume: CoroutineState<'a, Input, Output, Result>,
 }
 
+// I believe this is safe, as the closures are send and fnonce.
+// the coroutine can only be changed by move, so multiple aliases
+// shouldn't be a problem. Would love to have feedback on this
+unsafe impl<'a, I, O, R> Sync for Coroutine<'a, I, O, R> {}
+
 /// The internal state of the machine
 enum CoroutineState<'a, Input: 'a, Output: 'a, Result: 'a> {
     /// The coroutine is paused waiting for some-input
