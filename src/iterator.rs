@@ -1,6 +1,6 @@
-///! Convert the coroutine to an iterator
-///!
-///! One of the issues here is that we
+//! Convert the coroutine to an iterator
+//!
+//! One of the issues here is that we
 use crate::{
     executor::{run_until_output, IteratorExecutorResult},
     *,

@@ -164,6 +164,9 @@ where
     bind(rr, on_result)
 }
 
+/// A more specific version of select, where messages are exclusive
+///
+/// This allows you to not have to deal with A or B being cloneable
 pub enum UnicastSelect<A, B> {
     Left(A),
     Right(B),
