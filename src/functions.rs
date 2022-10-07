@@ -214,3 +214,46 @@ where
 pub fn void<I, O, A>(co: Coroutine<I, O, A>) -> Coroutine<I, O, ()> {
     map(co, |_| ())
 }
+
+/// Use this input for the next input
+///
+/// Allows us to provide a single input to the coroutine
+/// This will be provided the next time the co asks for an input
+/// the input 'request' wont propagate.
+/// If co is finished, the input is ignored
+pub fn inject<I, O, R>(input: I, co: Coroutine<I, O, R>) -> Coroutine<I, O, R>
+where
+    R: Send,
+    O: Send,
+{
+    match run_step(co) {
+        StepResult::Done(r) => result(r),
+        StepResult::Yield { output, next } => {
+            let out = send(output);
+            let next = inject(input, *next);
+            right(out, next)
+        }
+        StepResult::Next(next) => next(input),
+    }
+}
+
+/// Get the next output of the coroutine
+///
+/// This captures the next output, allowing it to be inspected instead of
+/// emitted. Returns the observed value and the remaining coroutine.
+/// If the coroutine has ended, the observed value is none.
+pub fn observe<I, O, R>(
+    co: Coroutine<I, O, R>,
+) -> Coroutine<I, O, (Option<O>, Coroutine<I, O, R>)> {
+    match run_step(co) {
+        StepResult::Done(r) => result((None, result(r))),
+        StepResult::Yield { output, next } => result((Some(output), *next)),
+        StepResult::Next(next) => {
+            let input = |input| {
+                let co = next(input);
+                observe(co)
+            };
+            suspend(input)
+        }
+    }
+}
