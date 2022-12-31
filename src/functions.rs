@@ -122,6 +122,22 @@ where
     subroutine(on_input, send, co)
 }
 
+/// Takes a coroutine that wants a, and 'lifts' or maps it into B
+///
+/// Note: This is somewhat backwards than you might expect map to be
+/// but is the closest you can get.
+pub fn map_input<'a, InputA, InputB, Output, Result, MapFn>(
+    co: Coroutine<'a, InputB, Output, Result>,
+    map_fn: MapFn,
+) -> Coroutine<'a, InputA, Output, Result>
+where
+    MapFn: Fn(InputA) -> InputB + Send + Clone + 'a,
+    Result: Send,
+    Output: Send,
+{
+    intercept_input(co, move |a| result(map_fn(a)))
+}
+
 /// Transforms the output of coroutine A into B
 ///
 /// This requires a coroutine that can map B outputs
@@ -141,6 +157,22 @@ where
     OutputA: Send,
 {
     subroutine(receive, transform, co)
+}
+
+/// Takes a coutine outputting A, and makes it output B
+///
+/// This is a specialization of intercept_output, when we
+/// don't need to have any affects
+pub fn map_output<'a, Input, OutputA, OutputB, Result, MapFn>(
+    co: Coroutine<'a, Input, OutputA, Result>,
+    map_fn: MapFn,
+) -> Coroutine<'a, Input, OutputB, Result>
+where
+    MapFn: Fn(OutputA) -> OutputB + Send + 'a,
+    OutputA: Send,
+    Result: Send,
+{
+    intercept_output(co, move |o| send(map_fn(o)))
 }
 
 /// Runs recieve until f returns some
