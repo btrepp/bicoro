@@ -1,6 +1,6 @@
 use crate::{
-    bind, map, receive, recieve_until, result, right, run_step, send, subroutine, suspend,
-    transform_input, tuple, Coroutine, StepResult,
+    bind, intercept_input, map, receive, recieve_until, result, right, run_step, send, subroutine,
+    suspend, tuple, Coroutine, StepResult,
 };
 
 /// A selection for which coroutine to route to
@@ -214,18 +214,18 @@ where
     // We need to convert out of the 'wrapped' inputs. So we change normal inputs to wrapped ones
     let extract = |dr| match dr {
         DispatchResult::Left { value, remaining } => {
-            let remaining = transform_input(remaining, |input| result(Wrapped(input)));
+            let remaining = intercept_input(remaining, |input| result(Wrapped(input)));
             DispatchResult::Left { value, remaining }
         }
         DispatchResult::Right { value, remaining } => {
-            let remaining = transform_input(remaining, |input| result(Wrapped(input)));
+            let remaining = intercept_input(remaining, |input| result(Wrapped(input)));
             DispatchResult::Right { value, remaining }
         }
     };
 
     // Extract from the wrappers to pass to lower levels
-    let first = transform_input(first, |input: Wrapped<IA>| result(input.0));
-    let second = transform_input(second, |input: Wrapped<IB>| result(input.0));
+    let first = intercept_input(first, |input: Wrapped<IA>| result(input.0));
+    let second = intercept_input(second, |input: Wrapped<IB>| result(input.0));
     let both = dispatch(selector_, first, second);
     map(both, extract)
 }

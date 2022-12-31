@@ -105,10 +105,10 @@ where
 /// into a, as this is similar to running 'co'
 /// in the context of the output
 ///
-/// This is a specialization of run_child
+/// This is a specialization of subroutine
 ///
 /// TLDR; change Input with the inform transform function
-pub fn transform_input<'a, Input, InputNested, Output, Transform, Result>(
+pub fn intercept_input<'a, Input, InputNested, Output, Transform, Result>(
     co: Coroutine<'a, InputNested, Output, Result>,
     transform: Transform,
 ) -> Coroutine<'a, Input, Output, Result>
@@ -131,7 +131,7 @@ where
 /// This is a specialization of run_child
 ///
 /// TLDR; change output with the output transform function
-pub fn transform_output<'a, Input, OutputA, OutputB, Transform, Result>(
+pub fn intercept_output<'a, Input, OutputA, OutputB, Transform, Result>(
     co: Coroutine<'a, Input, OutputA, Result>,
     transform: Transform,
 ) -> Coroutine<'a, Input, OutputB, Result>
