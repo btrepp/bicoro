@@ -1,5 +1,5 @@
 use crate::{
-    bind, map, receive, recieve_until, result, right, run_child, run_step, send, suspend,
+    bind, map, receive, recieve_until, result, right, run_step, send, subroutine, suspend,
     transform_input, tuple, Coroutine, StepResult,
 };
 
@@ -264,11 +264,11 @@ where
     // This will finish-of, the 'loser' coroutine. Thus getting the values tupled together
     let on_result = move |r| match r {
         DispatchResult::Left { value, remaining } => {
-            let remaining = run_child(on_ib_input, send, remaining);
+            let remaining = subroutine(on_ib_input, send, remaining);
             map(remaining, |b| (value, b))
         }
         DispatchResult::Right { value, remaining } => {
-            let remaining = run_child(on_ia_input, send, remaining);
+            let remaining = subroutine(on_ia_input, send, remaining);
             map(remaining, |a| (a, value))
         }
     };

@@ -69,9 +69,9 @@ where
 ///
 /// // run_child maps the child routine into the parenst 'world'
 /// // we can see the type of this is the parent coroutine
-/// let parent : Coroutine<i32,String,u8> = run_child(on_input,on_output,child);
+/// let parent : Coroutine<i32,String,u8> = subroutine(on_input,on_output,child);
 /// ```
-pub fn run_child<'a, Input, Output, ChildInput, ChildOutput, OnInput, OnOutput, Result>(
+pub fn subroutine<'a, Input, Output, ChildInput, ChildOutput, OnInput, OnOutput, Result>(
     on_input: OnInput,
     on_output: OnOutput,
     child: Coroutine<'a, ChildInput, ChildOutput, Result>,
@@ -86,13 +86,13 @@ where
         StepResult::Done(r) => result(r),
         StepResult::Yield { output, next } => {
             let output = on_output(output);
-            bind(output, move |()| run_child(on_input, on_output, *next))
+            bind(output, move |()| subroutine(on_input, on_output, *next))
         }
         StepResult::Next(n) => {
             let rout = on_input();
             let cont = move |i| {
                 let next = n(i);
-                run_child(on_input, on_output, next)
+                subroutine(on_input, on_output, next)
             };
             bind(rout, cont)
         }
@@ -119,7 +119,7 @@ where
 {
     let on_input =
         move || -> Coroutine<Input, Output, InputNested> { bind(receive(), transform.clone()) };
-    run_child(on_input, send, co)
+    subroutine(on_input, send, co)
 }
 
 /// Transforms the output of coroutine A into B
@@ -140,7 +140,7 @@ where
     Result: Send,
     OutputA: Send,
 {
-    run_child(receive, transform, co)
+    subroutine(receive, transform, co)
 }
 
 /// Runs recieve until f returns some

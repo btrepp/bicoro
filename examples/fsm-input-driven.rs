@@ -59,7 +59,7 @@ pub fn main() {
         "You are stopped by a turnstile!\r\n".to_string(),
     ))
     .and_then(|()| send(Output::Flush))
-    .and_then(|()| run_child(needs_input, on_output, turnstile));
+    .and_then(|()| subroutine(needs_input, on_output, turnstile));
 
     // This is the main loop. Notice it's really only concerned
     // with handling inputs and outputs of the termninal.
