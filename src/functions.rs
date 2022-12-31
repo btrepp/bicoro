@@ -158,6 +158,46 @@ where
     })
 }
 
+/// Use to either consume this input or re-emit as an output
+///
+/// This is useful when we want to intercept or transform
+/// messages, but I may not be convertible to IA
+/// In this case we emit the transform IB back out, hoping
+/// that another routine may deal with it
+pub fn receive_or_skip<'a, I, O, R, F, IA, IB>(
+    co: Coroutine<'a, IA, O, R>,
+    sel: F,
+) -> Coroutine<'a, I, UnicastSelect<IB, O>, R>
+where
+    F: Fn(I) -> UnicastSelect<IA, IB> + Send + 'a,
+    O: Send,
+    R: Send,
+{
+    match run_step(co) {
+        StepResult::Done(r) => result(r),
+        StepResult::Yield { output, next } => {
+            let output = send(UnicastSelect::Right(output));
+            let next = |()| receive_or_skip(*next, sel);
+            bind(output, next)
+        }
+        StepResult::Next(next) => {
+            let on_input = |input: I| match sel(input) {
+                UnicastSelect::Left(a) => {
+                    let next = next(a);
+                    receive_or_skip(next, sel)
+                }
+                UnicastSelect::Right(b) => {
+                    let output = send(UnicastSelect::Left(b));
+                    let next = suspend(next);
+                    let next = |()| receive_or_skip(next, sel);
+                    bind(output, next)
+                }
+            };
+            bind(receive(), on_input)
+        }
+    }
+}
+
 /// Runs two coroutines sequentially
 ///
 /// This will run first until it completes, then second afterwards
