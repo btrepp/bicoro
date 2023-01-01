@@ -314,7 +314,7 @@ where
 /// This captures the next output, allowing it to be inspected instead of
 /// emitted. Returns the observed value and the remaining coroutine.
 /// If the coroutine has ended, the observed value is none.
-pub fn observe<I, O, R>(
+pub fn try_observe<I, O, R>(
     co: Coroutine<I, O, R>,
 ) -> Coroutine<I, O, (Option<O>, Coroutine<I, O, R>)> {
     match run_step(co) {
@@ -323,7 +323,7 @@ pub fn observe<I, O, R>(
         StepResult::Next(next) => {
             let input = |input| {
                 let co = next(input);
-                observe(co)
+                try_observe(co)
             };
             suspend(input)
         }
