@@ -74,7 +74,7 @@ to implement with different contexts.
 
 ### Protocol descriptions
 
-This can be used to describe protocols using the sans-io philosophy https://sans-io.readthedocs.io. 
+This can be used to describe protocols using the sans-io philosophy <https://sans-io.readthedocs.io>. 
 A protocol can be thought of an actor that recieves input messages and responds with outputs, maintaing it's
 own internal state. As the coroutines are nestable and composeable, we can create subroutines and functions to solve
 particular 'sub states' of the protocol, e.g connecting then transitioning to the main part of the protocol.
