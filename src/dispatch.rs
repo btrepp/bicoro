@@ -1,6 +1,6 @@
 use crate::{
-    bind, intercept_input, map, receive, recieve_until, result, right, run_step, send, subroutine,
-    suspend, tuple, Coroutine, StepResult,
+    bind, intercept_input, map, map_input, map_output, receive, recieve_until, result, right,
+    run_step, send, subroutine, suspend, tuple, Coroutine, StepResult,
 };
 
 /// A selection for which coroutine to route to
@@ -12,14 +12,14 @@ pub enum Select<A, B, C> {
 
 /// Represents the result of running the left and right coroutines
 /// Returns whichever coroutine finished first
-pub enum DispatchResult<'a, IA, IB, O, A, B> {
+pub enum DispatchResult<'a, IA, IB, OA, OB, A, B> {
     Left {
         value: A,
-        remaining: Coroutine<'a, IB, O, B>,
+        remaining: Coroutine<'a, IB, OB, B>,
     },
     Right {
         value: B,
-        remaining: Coroutine<'a, IA, O, A>,
+        remaining: Coroutine<'a, IA, OA, A>,
     },
 }
 
@@ -29,15 +29,19 @@ pub enum DispatchResult<'a, IA, IB, O, A, B> {
 /// Selector will route the input as needed to coroutines a and b
 /// Values that can be sent to both, if the selector selects both
 /// and the both value is cloneable and convertable
-pub fn dispatch<'a, I, IA, IB, IAB, O, A, B, F>(
-    selector: F,
-    first: Coroutine<'a, IA, O, A>,
-    second: Coroutine<'a, IB, O, B>,
-) -> Coroutine<'a, I, O, DispatchResult<'a, IA, IB, O, A, B>>
+pub fn dispatch<'a, IA, IB, IAB, OA, OB, A, B>(
+    first: Coroutine<'a, IA, OA, A>,
+    second: Coroutine<'a, IB, OB, B>,
+) -> Coroutine<
+    'a,
+    Select<IA, IB, IAB>,
+    UnicastSelect<OA, OB>,
+    DispatchResult<'a, IA, IB, OA, OB, A, B>,
+>
 where
-    F: Fn(I) -> Select<IA, IB, IAB> + Send + 'a,
     IAB: Into<IA> + Into<IB> + Clone,
-    O: Send,
+    OA: Send,
+    OB: Send,
     A: Send,
     B: Send,
 {
@@ -55,7 +59,7 @@ where
         (StepResult::Done(value), StepResult::Yield { output, next }) => {
             let remaining = *next;
             let race = DispatchResult::Left { value, remaining };
-            right(send(output), result(race))
+            right(send(UnicastSelect::Right(output)), result(race))
         }
         (StepResult::Done(value), StepResult::Next(next)) => {
             let remaining = suspend(next);
@@ -64,7 +68,7 @@ where
         (StepResult::Yield { output, next }, StepResult::Done(value)) => {
             let remaining = *next;
             let race = DispatchResult::Right { value, remaining };
-            right(send(output), result(race))
+            right(send(UnicastSelect::Left(output)), result(race))
         }
         (
             StepResult::Yield {
@@ -76,13 +80,13 @@ where
                 next: nb,
             },
         ) => {
-            let send = tuple(send(a), send(b));
-            let next = dispatch(selector, *na, *nb);
+            let send = tuple(send(UnicastSelect::Left(a)), send(UnicastSelect::Right(b)));
+            let next = dispatch(*na, *nb);
             right(send, next)
         }
         (StepResult::Yield { output, next: a }, StepResult::Next(b)) => {
-            let send = send(output);
-            let next = dispatch(selector, *a, suspend(b));
+            let send = send(UnicastSelect::Left(output));
+            let next = dispatch(*a, suspend(b));
             right(send, next)
         }
         (StepResult::Next(a), StepResult::Done(value)) => {
@@ -91,28 +95,28 @@ where
             result(race)
         }
         (StepResult::Next(a), StepResult::Yield { output, next }) => {
-            let send = send(output);
+            let send = send(UnicastSelect::Right(output));
             let a = suspend(a);
             let b = *next;
-            let next = dispatch(selector, a, b);
+            let next = dispatch(a, b);
             right(send, next)
         }
         (StepResult::Next(a), StepResult::Next(b)) => {
-            let on_input = |input: I| match selector(input) {
+            let on_input = |input: Select<IA, IB, IAB>| match input {
                 Select::Left(ia) => {
                     let a = a(ia);
-                    dispatch(selector, a, suspend(b))
+                    dispatch(a, suspend(b))
                 }
                 Select::Right(ib) => {
                     let b = b(ib);
-                    dispatch(selector, suspend(a), b)
+                    dispatch(suspend(a), b)
                 }
                 Select::Both(iab) => {
                     let ia = iab.clone().into();
                     let ib = iab.into();
                     let a = a(ia);
                     let b = b(ib);
-                    dispatch(selector, a, b)
+                    dispatch(a, b)
                 }
             };
             bind(receive(), on_input)
@@ -124,20 +128,21 @@ where
 ///
 /// This is a more generic form of dispatch
 /// in which we want inputs send to both routines always
-pub fn broadcast<'a, I, O, A, B>(
-    first: Coroutine<'a, I, O, A>,
-    second: Coroutine<'a, I, O, B>,
-) -> Coroutine<'a, I, O, DispatchResult<'a, I, I, O, A, B>>
+pub fn broadcast<'a, I, OA, OB, A, B>(
+    first: Coroutine<'a, I, OA, A>,
+    second: Coroutine<'a, I, OB, B>,
+) -> Coroutine<'a, I, UnicastSelect<OA, OB>, DispatchResult<'a, I, I, OA, OB, A, B>>
 where
     I: Clone,
     A: Send,
     B: Send,
-    O: Send,
+    OA: Send,
+    OB: Send,
 {
     fn both_selector<I>(input: I) -> Select<I, I, I> {
         Select::Both(input)
     }
-    dispatch(both_selector, first, second)
+    map_input(dispatch(first, second), both_selector)
 }
 
 /// Sends inputs to both coroutines, and will emit outputs together
@@ -157,6 +162,10 @@ where
     O: Send,
 {
     let rr = broadcast(first, second);
+    let rr = map_output(rr, |input| match input {
+        UnicastSelect::Left(a) => a,
+        UnicastSelect::Right(a) => a,
+    });
     let on_result = |res| match res {
         DispatchResult::Left { value, remaining } => map(remaining, |b| (value, b)),
         DispatchResult::Right { value, remaining } => map(remaining, |a| (a, value)),
@@ -178,14 +187,18 @@ pub enum UnicastSelect<A, B> {
 /// Selector will route the input as needed to coroutines a and b
 /// This variant must send inputs to either first or second
 /// it does not share them. See dispatch if you need to share values
-pub fn unicast<'a, I, IA, IB, O, A, B, F>(
-    selector: F,
-    first: Coroutine<'a, IA, O, A>,
-    second: Coroutine<'a, IB, O, B>,
-) -> Coroutine<'a, I, O, DispatchResult<'a, IA, IB, O, A, B>>
+pub fn unicast<'a, IA, IB, OA, OB, A, B>(
+    first: Coroutine<'a, IA, OA, A>,
+    second: Coroutine<'a, IB, OB, B>,
+) -> Coroutine<
+    'a,
+    UnicastSelect<IA, IB>,
+    UnicastSelect<OA, OB>,
+    DispatchResult<'a, IA, IB, OA, OB, A, B>,
+>
 where
-    F: Fn(I) -> UnicastSelect<IA, IB> + Send + 'a,
-    O: Send,
+    OA: Send,
+    OB: Send,
     A: Send,
     B: Send,
 {
@@ -204,8 +217,8 @@ where
     }
 
     // Selector will never create Both, thus never and Into Impls are safe
-    let selector_ = move |input: I| -> Select<Wrapped<IA>, Wrapped<IB>, Never> {
-        match selector(input) {
+    let selector_ = move |input| -> Select<Wrapped<IA>, Wrapped<IB>, Never> {
+        match input {
             UnicastSelect::Left(l) => Select::Left(Wrapped(l)),
             UnicastSelect::Right(r) => Select::Right(Wrapped(r)),
         }
@@ -226,7 +239,7 @@ where
     // Extract from the wrappers to pass to lower levels
     let first = intercept_input(first, |input: Wrapped<IA>| result(input.0));
     let second = intercept_input(second, |input: Wrapped<IB>| result(input.0));
-    let both = dispatch(selector_, first, second);
+    let both = map_input(dispatch(first, second), selector_);
     map(both, extract)
 }
 
@@ -236,23 +249,19 @@ where
 /// If IA is finished, the rest of its inputs will be thrown away/ignored
 /// Be careful, as this could cause the routines to never complete
 pub fn unicast_until_finished<'a, I, IA, IB, O, A, B, F>(
-    selector: F,
     first: Coroutine<'a, IA, O, A>,
     second: Coroutine<'a, IB, O, B>,
-) -> Coroutine<'a, I, O, (A, B)>
+) -> Coroutine<'a, UnicastSelect<IA, IB>, O, (A, B)>
 where
-    F: Fn(I) -> UnicastSelect<IA, IB> + Clone + Send + 'a,
     O: Send,
     A: Send,
     B: Send,
 {
-    let ib_selector = selector.clone();
-    let is_ib = move |input: I| match ib_selector(input) {
+    let is_ib = move |input| match input {
         UnicastSelect::Left(_) => result(None),
         UnicastSelect::Right(b) => result(Some(b)),
     };
-    let ia_selector = selector.clone();
-    let is_ia = move |input: I| match ia_selector(input) {
+    let is_ia = move |input| match input {
         UnicastSelect::Left(a) => result(Some(a)),
         UnicastSelect::Right(_) => result(None),
     };
@@ -272,6 +281,10 @@ where
             map(remaining, |a| (a, value))
         }
     };
-    let ur = unicast(selector, first, second);
+    let ur = unicast(first, second);
+    let ur = map_output(ur, |o| match o {
+        UnicastSelect::Left(o) => o,
+        UnicastSelect::Right(o) => o,
+    });
     bind(ur, on_result)
 }
