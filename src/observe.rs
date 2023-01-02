@@ -10,9 +10,7 @@ pub enum ObserveResult<'a, I, O, R> {
     },
 }
 
-pub fn observe<'a, I, O, R>(
-    co: Coroutine<'a, I, O, R>,
-) -> Coroutine<'a, I, O, ObserveResult<'a, I, O, R>> {
+pub fn observe<I, O, R>(co: Coroutine<I, O, R>) -> Coroutine<I, O, ObserveResult<I, O, R>> {
     match run_step(co) {
         StepResult::Done(value) => result(ObserveResult::Finished { value }),
         StepResult::Yield { output, next } => result(ObserveResult::Output {

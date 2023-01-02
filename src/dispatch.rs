@@ -23,6 +23,12 @@ pub enum DispatchResult<'a, IA, IB, OA, OB, A, B> {
     },
 }
 
+type DispatchRoutine<'a, IA, IB, IAB, OA, OB, A, B> = Coroutine<
+    'a,
+    Select<IA, IB, IAB>,
+    UnicastSelect<OA, OB>,
+    DispatchResult<'a, IA, IB, OA, OB, A, B>,
+>;
 /// Run two co-routines, sharing inputs depending on selector.
 ///
 /// This can be thought of as running them almost in parralel.
@@ -32,12 +38,7 @@ pub enum DispatchResult<'a, IA, IB, OA, OB, A, B> {
 pub fn dispatch<'a, IA, IB, IAB, OA, OB, A, B>(
     first: Coroutine<'a, IA, OA, A>,
     second: Coroutine<'a, IB, OB, B>,
-) -> Coroutine<
-    'a,
-    Select<IA, IB, IAB>,
-    UnicastSelect<OA, OB>,
-    DispatchResult<'a, IA, IB, OA, OB, A, B>,
->
+) -> DispatchRoutine<'a, IA, IB, IAB, OA, OB, A, B>
 where
     IAB: Into<IA> + Into<IB> + Clone,
     OA: Send,
@@ -124,6 +125,8 @@ where
     }
 }
 
+pub type BroadcastRoutine<'a, I, OA, OB, A, B> =
+    Coroutine<'a, I, UnicastSelect<OA, OB>, DispatchResult<'a, I, I, OA, OB, A, B>>;
 /// Sends inputs to both coroutines, and will emit outputs together
 ///
 /// This is a more generic form of dispatch
@@ -131,7 +134,7 @@ where
 pub fn broadcast<'a, I, OA, OB, A, B>(
     first: Coroutine<'a, I, OA, A>,
     second: Coroutine<'a, I, OB, B>,
-) -> Coroutine<'a, I, UnicastSelect<OA, OB>, DispatchResult<'a, I, I, OA, OB, A, B>>
+) -> BroadcastRoutine<'a, I, OA, OB, A, B>
 where
     I: Clone,
     A: Send,
@@ -248,7 +251,7 @@ where
 /// Unlike broadcast, there is an issue with completing unicast routines
 /// If IA is finished, the rest of its inputs will be thrown away/ignored
 /// Be careful, as this could cause the routines to never complete
-pub fn unicast_until_finished<'a, I, IA, IB, O, A, B, F>(
+pub fn unicast_until_finished<'a, IA, IB, O, A, B>(
     first: Coroutine<'a, IA, O, A>,
     second: Coroutine<'a, IB, O, B>,
 ) -> Coroutine<'a, UnicastSelect<IA, IB>, O, (A, B)>
@@ -267,8 +270,8 @@ where
     };
 
     // These ultimately throw away inputs that aren't for them
-    let on_ib_input = move || recieve_until(is_ib.clone());
-    let on_ia_input = move || recieve_until(is_ia.clone());
+    let on_ib_input = move || recieve_until(is_ib);
+    let on_ia_input = move || recieve_until(is_ia);
 
     // This will finish-of, the 'loser' coroutine. Thus getting the values tupled together
     let on_result = move |r| match r {
