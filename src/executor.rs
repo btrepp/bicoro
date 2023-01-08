@@ -3,6 +3,8 @@
 //! It's not necessary to use this, as run_step is all you need if rolling your own
 //! but it's a good reference, and is fairly generally useable
 
+use std::fmt::Debug;
+
 use crate::*;
 
 pub enum IteratorExecutorResult<'a, It, Input, Output, Result> {
@@ -23,6 +25,34 @@ pub enum IteratorExecutorResult<'a, It, Input, Output, Result> {
     Exhausted {
         co: Box<dyn FnOnce(Input) -> Coroutine<'a, Input, Output, Result> + Send + 'a>,
     },
+}
+
+impl<'a, It, Input, Output, Result> core::fmt::Debug
+    for IteratorExecutorResult<'a, It, Input, Output, Result>
+where
+    Result: Debug,
+    It: Debug,
+    Output: Debug,
+{
+    fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
+        match self {
+            Self::Completed { result, remaining } => f
+                .debug_struct("Completed")
+                .field("result", result)
+                .field("remaining", remaining)
+                .finish(),
+            Self::Output {
+                output,
+                co,
+                remaining,
+            } => f
+                .debug_struct("Output")
+                .field("output", output)
+                .field("remaining", remaining)
+                .finish(),
+            Self::Exhausted { co } => f.debug_struct("Exhausted").finish(),
+        }
+    }
 }
 
 /// Consumes a coroutine and runs it with the iterated events
