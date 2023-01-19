@@ -26,7 +26,10 @@ enum CoroutineState<'a, Input: 'a, Output: 'a, Result: 'a> {
     /// The coroutine is paused waiting for some-input
     Await(Box<dyn FnOnce(Input) -> Coroutine<'a, Input, Output, Result> + Send + 'a>),
     /// The coroutine is paused, waiting for a output to be consumed
-    Yield(Output, Box<Coroutine<'a, Input, Output, Result>>),
+    Yield(
+        Output,
+        Box<dyn FnOnce() -> Coroutine<'a, Input, Output, Result> + Send + 'a>,
+    ),
     /// The coroutine is completed
     Done(Result),
 }
@@ -68,7 +71,7 @@ where
 /// let co :Coroutine<(),&str,()> = send("hello");
 /// ```
 pub fn send<'a, I, O>(o: O) -> Coroutine<'a, I, O, ()> {
-    let resume = CoroutineState::Yield(o, Box::new(result(())));
+    let resume = CoroutineState::Yield(o, Box::new(|| result(())));
     Coroutine { resume }
 }
 
@@ -90,7 +93,7 @@ where
     match m.resume {
         CoroutineState::Done(ra) => f(ra),
         CoroutineState::Yield(output, ra) => {
-            let state = bind(*ra, f);
+            let state = || bind(ra(), f);
             let resume = CoroutineState::Yield(output, Box::new(state));
             Coroutine { resume }
         }
@@ -145,6 +148,9 @@ pub fn run_step<I, O, R>(routine: Coroutine<I, O, R>) -> StepResult<I, O, R> {
     match routine.resume {
         CoroutineState::Done(result) => StepResult::Done(result),
         CoroutineState::Await(run) => StepResult::Next(run),
-        CoroutineState::Yield(output, next) => StepResult::Yield { output, next },
+        CoroutineState::Yield(output, next) => StepResult::Yield {
+            output,
+            next: Box::new(next()),
+        },
     }
 }

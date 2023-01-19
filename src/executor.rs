@@ -43,14 +43,14 @@ where
                 .finish(),
             Self::Output {
                 output,
-                co,
+                co: _,
                 remaining,
             } => f
                 .debug_struct("Output")
                 .field("output", output)
                 .field("remaining", remaining)
                 .finish(),
-            Self::Exhausted { co } => f.debug_struct("Exhausted").finish(),
+            Self::Exhausted { co: _ } => f.debug_struct("Exhausted").finish(),
         }
     }
 }
